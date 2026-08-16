@@ -8,11 +8,15 @@
 
 ```bash
 uname -a
+uname -m
 node --version
-which sqlite3 && sqlite3 --version
+node -e "console.log('fetch:', typeof fetch)"
+which node && which sqlite3 && sqlite3 --version
 ```
 
-预期：Node ≥ 18；sqlite3 存在（Linux 若 `which` 无输出就是缺它，hook 会静默失败）。
+预期：Node ≥ 18（且 `fetch: function`——Intel Mac 上常见旧 node，缺 fetch 会让 MCP 服务运行时崩溃）；sqlite3 存在（Linux 若 `which` 无输出就是缺它，hook 会静默失败）。
+
+> Intel Mac 特别注意：bundle 是纯 JS，与 CPU 架构无关；真正的风险是**系统 node 版本过旧**（Intel 机器通常装得早、一直没升）和 **node 不在 ZCode 拉起的进程 PATH 里**。上面两条命令能一步验证。
 
 ## 第 2 步：核心文件
 
@@ -115,6 +119,7 @@ ls -t ~/.zcode/cli/log/*.jsonl | head -1 | xargs grep -i "image-parser" | tail -
 
 | 症状 | 原因 | 修复 |
 |---|---|---|
+| tools/call 报 `fetch is not defined` | 系统 node < 18（Intel 老 Mac 常见） | `brew install node@20` 并确保 PATH 指向新 node，重启 ZCode |
 | hook 不生效、fire log 无记录 | Linux 缺 sqlite3 | `apt install sqlite3`，重启 ZCode |
 | parse_image 解析返回鉴权错误 | install.js 没带 key，config 里是占位符 | 编辑 `~/.zcode/cli/config.json` 填真实 key |
 | 工具列表里没有 parse_image | ZCode 没完全重启 | 完全退出 ZCode 再开 |
