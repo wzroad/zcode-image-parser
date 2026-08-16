@@ -88,6 +88,17 @@ process.stdin.on("end", () => {
       process.exit(0);
     }
     const imgPath = newestImageFile(path.join(CACHE_ROOT, sid));
+    // 新会话首条消息：tasks 表还没落库（实测提交晚于 hook 约 150ms），查不到模型。
+    // 无法判断模型能力 → 拦截以防 v4-pro 400；重发时模型已落库，走正常分支。
+    if (!model) {
+      fireLog({ event, decision: "block", reason: "unknown_session", sid, imgPath });
+      const msg =
+        `[图片路由] 新会话首次贴图已拦截（会话模型信息尚未入库，无法判断能否处理图片，拦截以防报错）。\n` +
+        (imgPath ? `图片已缓存到：${imgPath}\n` : "") +
+        `请直接重新发送同样的消息：再次提交时会话信息已就绪，模型支持则自动解析，不支持会给出明确指引。`;
+      process.stderr.write(msg + "\n");
+      process.exit(2);
+    }
     if (!imgPath) {
       fireLog({ event, decision: "allow", reason: "no_cache_found", sid, model });
       process.exit(0);
