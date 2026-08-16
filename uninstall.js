@@ -20,9 +20,14 @@ const AGENTS_END = "# ===== image-parser-bundle end =====";
 
 function log(m) { console.log(`[uninstall] ${m}`); }
 
-// 1. 脚本
-for (const f of ["image-parser-server.js", "hook-image-guard.js"]) {
-  const p = path.join(HOME, f);
+// 1. 脚本（兼容新旧两代安装路径）
+const scriptPaths = [
+  path.join(HOME, ".zcode", "mcp", "image-parser", "image-parser-server.js"),
+  path.join(HOME, ".zcode", "mcp", "image-parser", "hook-image-guard.js"),
+  path.join(HOME, "image-parser-server.js"), // 旧版安装位置
+  path.join(HOME, "hook-image-guard.js"), // 旧版安装位置
+];
+for (const p of scriptPaths) {
   if (fs.existsSync(p)) { fs.unlinkSync(p); log(`删除 ${p}`); }
 }
 

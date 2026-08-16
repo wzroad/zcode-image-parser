@@ -85,7 +85,7 @@ node install.js sk-你的key
 |---|---|
 | `image-parser-server.js` | MCP 服务：`parse_image(image, prompt?, max_tokens?)`，Anthropic 兼容端点调 MiniMax-M3 |
 | `hook-image-guard.js` | 双事件 hook：`UserPromptSubmit`（贴图路由）+ `PreToolUse`（Read 守卫） |
-| `install.js` | 一键安装：合并 `~/.zcode/cli/config.json`、追加 AGENTS.md 规则区块、标记 M3 图片能力（全部幂等） |
+| `install.js` | 一键安装：脚本装到 `~/.zcode/mcp/image-parser/`、合并 `~/.zcode/cli/config.json`、追加 AGENTS.md 规则区块、标记 M3 图片能力（全部幂等） |
 | `uninstall.js` | 干净卸载，不破坏用户原有配置 |
 
 ## 行为矩阵
@@ -107,7 +107,7 @@ node install.js sk-你的key
     "servers": {
       "image-parser": {
         "command": "node",
-        "args": ["/Users/你/image-parser-server.js"],
+        "args": ["/Users/你/.zcode/mcp/image-parser/image-parser-server.js"],
         "env": { "MINIMAX_API_KEY": "sk-...", "MINIMAX_MODEL": "MiniMax-M3" }
       }
     }
@@ -115,8 +115,8 @@ node install.js sk-你的key
   "hooks": {
     "enabled": true,
     "events": {
-      "UserPromptSubmit": [{ "hooks": [{ "type": "process", "command": "node", "args": ["/Users/你/hook-image-guard.js"] }] }],
-      "PreToolUse": [{ "hooks": [{ "type": "process", "command": "node", "args": ["/Users/你/hook-image-guard.js"] }] }]
+      "UserPromptSubmit": [{ "hooks": [{ "type": "process", "command": "node", "args": ["/Users/你/.zcode/mcp/image-parser/hook-image-guard.js"] }] }],
+      "PreToolUse": [{ "hooks": [{ "type": "process", "command": "node", "args": ["/Users/你/.zcode/mcp/image-parser/hook-image-guard.js"] }] }]
     }
   }
 }
@@ -147,6 +147,8 @@ node uninstall.js
 ```
 image-parser-bundle/
 ├── README.md               # 本文档
+├── DIAGNOSE.md             # 新机故障诊断流程
+├── LICENSE                 # MIT
 ├── install.js              # 一键安装器（幂等）
 ├── uninstall.js            # 卸载器
 ├── image-parser-server.js  # MCP 服务

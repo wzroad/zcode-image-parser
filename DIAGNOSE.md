@@ -21,10 +21,11 @@ which node && which sqlite3 && sqlite3 --version
 ## 第 2 步：核心文件
 
 ```bash
-ls -la ~/image-parser-server.js ~/hook-image-guard.js
+ls -la ~/.zcode/mcp/image-parser/image-parser-server.js ~/.zcode/mcp/image-parser/hook-image-guard.js
+ls -la ~/image-parser-server.js ~/hook-image-guard.js 2>/dev/null || echo "(无旧版安装位置文件，正常)"
 ```
 
-预期：两个文件都存在且有内容（不是 0 字节）。
+预期：新版路径（`~/.zcode/mcp/image-parser/`）下两个文件都存在且有内容（不是 0 字节）；旧版路径无文件。
 
 ## 第 3 步：ZCode 配置
 
@@ -59,7 +60,7 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"parse_image","arguments":{"image":"/tmp/mcp_test.png","prompt":"这张图是什么颜色？一句话回答。","max_tokens":80}}}' \
-| MINIMAX_API_KEY="$KEY" node ~/image-parser-server.js
+| MINIMAX_API_KEY="$KEY" node ~/.zcode/mcp/image-parser/image-parser-server.js
 ```
 
 预期：`tools/list` 返回 `parse_image` 工具；`tools/call` 返回文字解析（应提到"红色"）。若这里失败，把 stderr 完整贴出。
@@ -67,8 +68,8 @@ printf '%s\n' \
 ## 第 6 步：hook 单测
 
 ```bash
-echo '{"hookEventName":"UserPromptSubmit","attachmentsSummary":"","sessionId":"sess_fake"}' | node ~/hook-image-guard.js; echo "exit=$?"
-echo '{"hookEventName":"PreToolUse","sessionId":"sess_fake","toolName":"Read","toolInput":{"file_path":"/tmp/mcp_test.png"}}' | node ~/hook-image-guard.js; echo "exit=$?"
+echo '{"hookEventName":"UserPromptSubmit","attachmentsSummary":"","sessionId":"sess_fake"}' | node ~/.zcode/mcp/image-parser/hook-image-guard.js; echo "exit=$?"
+echo '{"hookEventName":"PreToolUse","sessionId":"sess_fake","toolName":"Read","toolInput":{"file_path":"/tmp/mcp_test.png"}}' | node ~/.zcode/mcp/image-parser/hook-image-guard.js; echo "exit=$?"
 cat /tmp/zcode_hook_fire.log 2>/dev/null | tail -5
 ```
 

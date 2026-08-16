@@ -8,11 +8,10 @@
  *   测试: node install.js --dest /tmp/test-home (不写入真实 $HOME)
  *
  * 安装内容:
- *   1. ~/image-parser-server.js     MCP 服务（MiniMax M3 图片解析）
- *   2. ~/hook-image-guard.js        图片路由 hook（贴图注入 + 禁 Read 图片 + v4-pro 拦截）
- *   3. ~/.zcode/cli/config.json     MCP + hooks 配置（与已有配置合并）
- *   4. ~/.zcode/AGENTS.md           全局图片解析路由规则（带标记区块，可重复安装）
- *   5. ~/.zcode/v2/config.json      把 MiniMax-M3 标记为支持 image 输入（幂等）
+ *   1. ~/.zcode/mcp/image-parser/ 脚本落点（MCP 服务 + 路由 hook）
+ *   2. ~/.zcode/cli/config.json    MCP + hooks 配置（与已有配置合并）
+ *   3. ~/.zcode/AGENTS.md          全局图片解析路由规则（带标记区块，可重复安装）
+ *   4. ~/.zcode/v2/config.json     把 MiniMax-M3 标记为支持 image 输入（幂等）
  */
 const fs = require("fs");
 const path = require("path");
@@ -31,6 +30,8 @@ const apiKey =
   "";
 
 const HOME = dest ? path.resolve(dest) : require("os").homedir();
+// 脚本统一安装到 ~/.zcode/mcp/image-parser/（不污染 $HOME 根目录）
+const INSTALL_DIR = path.join(HOME, ".zcode", "mcp", "image-parser");
 const SRC = __dirname;
 
 const AGENTS_MARK = "# ===== image-parser-bundle =====";
@@ -79,8 +80,9 @@ function writeJson(p, obj) {
 /* ── 1. 复制脚本 ── */
 function copyScript(name) {
   const from = path.join(SRC, name);
-  const to = path.join(HOME, name);
+  const to = path.join(INSTALL_DIR, name);
   if (!fs.existsSync(from)) throw new Error(`缺少 ${name}，bundle 不完整`);
+  fs.mkdirSync(INSTALL_DIR, { recursive: true });
   fs.copyFileSync(from, to);
   fs.chmodSync(to, 0o755);
   log(`复制 ${name} → ${to}`);
@@ -94,7 +96,7 @@ function mergeCliConfig() {
   if (!cfg.mcp.servers) cfg.mcp.servers = {};
   cfg.mcp.servers["image-parser"] = {
     command: "node",
-    args: [path.join(HOME, "image-parser-server.js")],
+    args: [path.join(INSTALL_DIR, "image-parser-server.js")],
     env: {
       MINIMAX_API_KEY: apiKey || "在此填入你的 MiniMax API key",
       MINIMAX_MODEL: "MiniMax-M3",
@@ -106,7 +108,7 @@ function mergeCliConfig() {
   const guard = {
     type: "process",
     command: "node",
-    args: [path.join(HOME, "hook-image-guard.js")],
+    args: [path.join(INSTALL_DIR, "hook-image-guard.js")],
     timeoutMs: 15000,
   };
   const mergeEvent = (ev) => {
