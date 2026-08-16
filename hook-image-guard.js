@@ -15,6 +15,9 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 
 const FIRE_LOG = "/tmp/zcode_hook_fire.log";
+// 拦截状态：ZCode 的 UserPromptSubmit 拦截不显示原因（静默失败），
+// 把被拦的图片路径存下来，等用户下一条消息时注入给模型，由模型向用户说明。
+const STATE_FILE = "/tmp/zcode_hook_block_state.json";
 const HOME = process.env.HOME || "";
 const DB = HOME + "/.zcode/v2/tasks-index.sqlite";
 const CACHE_ROOT = HOME + "/.zcode/cli/image-cache";
@@ -60,6 +63,20 @@ function newestImageFile(dir) {
   }
 }
 
+function readState() {
+  try {
+    return JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+  } catch (e) {
+    return {};
+  }
+}
+
+function writeState(s) {
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(s));
+  } catch (e) {}
+}
+
 let raw = "";
 process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => (raw += c));
@@ -78,7 +95,27 @@ process.stdin.on("end", () => {
   /* ══════════ UserPromptSubmit ══════════ */
   if (event === "UserPromptSubmit") {
     const summary = String(stdin.attachmentsSummary || "");
-    if (!/image/i.test(summary)) {
+    const hasImage = /image/i.test(summary);
+
+    // 上一条贴图被拦截过（无可见提示）→ 本条无图时注入说明，让模型向用户解释并给出解析结果
+    if (!hasImage && sid) {
+      const state = readState();
+      const pending = state[sid];
+      if (pending && Date.now() - pending.ts < 10 * 60 * 1000) {
+        delete state[sid];
+        writeState(state);
+        const ctx =
+          `【图片路由提醒】用户刚在本会话贴了一张图片，被拦截（本会话模型 ${pending.shortModel || "未知"} 不支持图片输入，直接贴图会导致报错）。\n` +
+          `图片已由客户端缓存到：${pending.imgPath}\n` +
+          `请先调用 parse_image({ image: "${pending.imgPath}" }) 解析该图片，然后把解析结果呈现给用户，` +
+          `并简要说明：此会话模型不支持直接贴图，建议切换 deepseek-v4-flash 或 MiniMax-M3 会话贴图，或发图片文件路径让我解析。`;
+        fireLog({ event, decision: "inject_block_notice", sid, model: pending.model });
+        process.stdout.write(JSON.stringify({ additionalContext: ctx }) + "\n");
+        process.exit(0);
+      }
+    }
+
+    if (!hasImage) {
       fireLog({ event, decision: "allow", reason: "no_image" });
       process.exit(0);
     }
@@ -92,11 +129,10 @@ process.stdin.on("end", () => {
     // 无法判断模型能力 → 拦截以防 v4-pro 400；重发时模型已落库，走正常分支。
     if (!model) {
       fireLog({ event, decision: "block", reason: "unknown_session", sid, imgPath });
-      const msg =
-        `[图片路由] 新会话首次贴图已拦截（会话模型信息尚未入库，无法判断能否处理图片，拦截以防报错）。\n` +
-        (imgPath ? `图片已缓存到：${imgPath}\n` : "") +
-        `请直接重新发送同样的消息：再次提交时会话信息已就绪，模型支持则自动解析，不支持会给出明确指引。`;
-      process.stderr.write(msg + "\n");
+      const st = readState();
+      st[sid] = { ts: Date.now(), model: "", shortModel: "未知", imgPath: imgPath || "" };
+      writeState(st);
+      process.stderr.write("[图片路由] 新会话首次贴图已拦截（会话模型未入库），请直接重新发送。\n");
       process.exit(2);
     }
     if (!imgPath) {
@@ -107,6 +143,9 @@ process.stdin.on("end", () => {
     if (BLOCK_RE.test(model)) {
       const shortModel = model.split("/").pop().split("$")[0] || "当前";
       fireLog({ event, decision: "block", sid, model, imgPath });
+      const st = readState();
+      st[sid] = { ts: Date.now(), model, shortModel, imgPath };
+      writeState(st);
       const msg =
         `[图片路由] 会话模型 ${shortModel} 不支持图片输入，贴图会导致本轮请求报错，已拦截。\n` +
         `图片已缓存到：${imgPath}\n` +
